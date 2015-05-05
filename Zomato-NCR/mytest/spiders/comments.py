@@ -1,0 +1,88 @@
+import scrapy
+from scrapy.contrib.linkextractors import LinkExtractor
+from scrapy.selector import Selector
+from scrapy.spider import BaseSpider
+from scrapy.selector import HtmlXPathSelector
+from mytest.items import MytestItem
+from lxml import etree
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+
+class ZomatoRestrComments(scrapy.Spider):
+
+	name = "zomcomment"
+	allowed_domains = ["zomato.com"]
+	start_urls = [
+		"https://www.zomato.com/ncr/lutyens-cocktail-house-janpath-new-delhi"
+		]
+
+	def __init__(self):
+		self.driver = webdriver.Firefox()
+
+	def parse(self, response):
+		# use of selenium 
+		self.driver.get(response.url)
+		next = self.driver.find_element(By.XPATH,'//div[contains(@class,"clearfix zs-load-more res-page-load-more")]')
+		while True:
+			try:
+			 	next.click()
+			except:
+				break
+
+		# use of scrapy
+		items = []
+		page = self.driver.page_source
+		sel = etree.HTML(page)
+		filename = response.url.split('/')[-1]+".txt"
+		f = open(filename,'a')		
+		films = sel.xpath('//div[contains(@class, "zs-following-list")]')
+		for film in films:
+			# Populate film fields
+			item = MytestItem()
+			item['comment'] = film.xpath('//div[contains(@itemprop, "description")]/div/text()')
+			items.append(item)
+		for i in range(0,len(items)):
+			all_comments = ''.join(items[i]['comment']).encode('utf8').replace('\n',' ')
+			all_comments =all_comments.split('          ')
+
+		for final_comments in all_comments:
+				if(final_comments!=""):
+					print final_comments.strip()
+					f.write(final_comments.strip()+"\n\n")
+
+		# closing selenium
+		self.driver.close()
+		return items
+ 
+	
+ 
+	def __normalise(self, value):
+		# Convert list to string
+		value = value if type(value) is not list else ' '.join(value)
+		# Trim leading and trailing special characters (Whitespaces, newlines, spaces, tabs, carriage returns)   div[contains(@class, "rev-text") or 
+		value = value.strip()
+ 
+		return value
+ 
+	def __to_absolute_url(self, base_url, link):
+		import urlparse
+		link = urlparse.urljoin(base_url, link)
+ 		return link
+ 
+	def __to_int(self, value):
+		try:
+			value = int(value)
+		except ValueError:
+			value = 0
+ 
+		return value
+ 
+	def __to_float(self, value):
+		try:
+			value = float(value)
+		except ValueError:
+			value = 0.0
+ 
+		return value
